@@ -1,0 +1,109 @@
+vert
+
+#version 330 core
+
+layout (location = 0) in vec3 aPos;
+layout (location = 1) in vec3 aNormal;
+layout (location = 2) in vec2 aTexCoord;
+
+uniform mat4 M;
+uniform mat4 normalM;
+uniform mat4 V;
+
+out VS_OUT {
+	vec3 normal;
+	vec3 fragpos;
+	vec2 texCoord;
+	vec3 viewDir;
+} vs_out;
+
+vec4 worldPos;
+
+void main()
+{
+	worldPos = M * vec4(aPos, 1.0);
+
+	gl_Position = V * worldPos;
+	vs_out.fragpos = vec3(worldPos);
+	vs_out.texCoord = aTexCoord;
+	vs_out.normal = normalize((normalM * vec4(aNormal, 0.0)).xyz);
+	vs_out.viewDir = normalize((V * worldPos).xyz);
+}
+
+
+geom
+
+#version 330 core
+
+layout (triangles) in;
+layout (triangle_strip, max_vertices = 9) out;
+
+in VS_OUT {
+	vec3 normal;
+	vec3 fragpos;
+	vec2 texCoord;
+	vec3 viewDir;
+} gs_in[];
+
+out GS_OUT {
+	vec3 fragposGS;
+	vec3 normalGS;
+	vec2 texCoordGS;
+	vec3 viewDirGS;
+} gs_out;
+
+uniform mat4 P;
+uniform float time;
+float flameHeight = 0.05;
+
+void main(){
+	vec3 flameDir = normalize(gs_in[0].viewDir);
+	vec3 flameBase = gs_in[0].fragpos + normalize(flameHeight * flameDir);
+
+	for (int i = 0; i < gl_in.length(); ++i) {
+		float offset = sin(time * 5.0 + i) * 0.1;
+		vec3 flameTip = gs_in[i].fragpos + normalize(flameHeight * flameDir) + offset;
+		 
+		gl_Position = P * vec4(flameBase, 1.0);
+		gs_out.fragposGS = flameBase;
+		gs_out.texCoordGS = gs_in[i].texCoord;
+		gs_out.normalGS = gs_in[i].normal;
+		gs_out.viewDirGS = gs_in[i].viewDir;
+		EmitVertex();
+
+		gl_Position = P * vec4(flameTip, 1.0);
+		gs_out.fragposGS = flameTip;
+		gs_out.texCoordGS = gs_in[i].texCoord;
+		gs_out.normalGS = gs_in[i].normal;
+		gs_out.viewDirGS = gs_in[i].viewDir;
+		EmitVertex();
+	}
+	EndPrimitive();
+
+}
+
+frag
+
+#version 330 core
+
+uniform sampler2D ourTexture;
+
+in GS_OUT {
+    vec3 fragposGS;
+    vec3 normalGS;
+    vec2 texCoordGS;
+    vec3 viewDirGS;
+} fs_in;
+
+//in vec3 color;
+
+out vec4 FragColor;
+
+vec3 flameColor = vec3(0.6, 0.3, 0.0);
+
+void main()
+{
+    float alpha = smoothstep(0.0, 0.2, 1.0 - length(fs_in.fragposGS - gl_FragCoord.xyz) / 500.0);
+    vec3 color = mix(vec3(1.0, 0.5, 0.0), flameColor, alpha);
+    FragColor = vec4(color, 1.0);
+}
